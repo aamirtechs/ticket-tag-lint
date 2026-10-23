@@ -77,7 +77,25 @@ footer .links a{margin:0 10px}
   .grid{grid-template-columns:1fr}
 }
 </style>
+
+<style>
+.tool label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
+.tool input[type=file]{width:100%;padding:13px;border:1.5px dashed #b9c6d4;border-radius:9px;background:#fbfcfe;margin-bottom:12px}
+.tool input[type=text],.tool input[type=date],.tool input[type=number],.tool textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff;margin-bottom:12px}
+.tool textarea{min-height:110px;font-family:Consolas,monospace;font-size:.85rem}
+.tool .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:680px){.tool .grid2{grid-template-columns:1fr}}
+button.go{background:var(--gold);color:#171106;border:0;font:inherit;font-weight:700;padding:13px 26px;border-radius:10px;cursor:pointer;width:100%;font-size:1.02rem}
+button.dl{background:var(--navy);color:#fff;border:0;font:inherit;font-weight:600;padding:10px 18px;border-radius:9px;cursor:pointer;margin-right:8px;margin-top:10px}
+#status{margin-top:14px;font-weight:600}
+#status.error{color:#b3261e}
+pre.report{background:#0e1622;color:#d7e3f2;border-radius:12px;padding:18px;overflow:auto;max-height:520px;font-size:.82rem;line-height:1.55;white-space:pre-wrap;text-align:left}
+.hidden{display:none}
+.hint{color:var(--muted);font-size:.85rem;margin:-6px 0 12px}
+.drop{border:2px dashed var(--gold);border-radius:12px;padding:16px;text-align:center;color:var(--muted);margin-bottom:16px;background:#fffdf4}
+</style>
 </head>
+<body>
 <body>
 <header class="hero">
   <span class="tag">Free open source tool</span>
@@ -86,6 +104,31 @@ footer .links a{margin:0 10px}
   <a class="btn" href="https://github.com/aamirtechs/ticket-tag-lint">View source on GitHub</a>
 </header>
 <main class="wrap">
+
+  <section class="tool" id="toolCard">
+    <h2>Run ticket-tag-lint in your browser</h2>
+    <p class="note">Runs fully in your browser, files never leave your device.</p>
+    <div class="drop" id="dropZone">Drag and drop your tickets CSV and optional config JSON here, or use the pickers below.</div>
+    <label for="file">1. Tickets CSV (id, tags, created_at)</label>
+    <input type="file" id="file" accept=".csv,.txt">
+    <label for="paste">Or paste tickets CSV</label>
+    <textarea id="paste" placeholder="id,tags,created_at"></textarea>
+    <label for="configFile">Optional: config JSON (pattern, deadDays, referenceDate)</label>
+    <input type="file" id="configFile" accept=".json,.txt">
+    <label for="configText">Or paste config JSON</label>
+    <textarea id="configText" placeholder="Leave empty for defaults"></textarea>
+    <div class="grid2">
+      <div><label for="deadDays">Dead days override (blank uses config or 90)</label><input type="number" id="deadDays" min="0" step="1" placeholder="90"></div>
+      <div><label for="referenceDate">Reference date override (YYYY-MM-DD)</label><input type="date" id="referenceDate"></div>
+    </div>
+    <label for="pattern">Naming pattern override (regex, blank uses config or the default snake_case pattern)</label>
+    <input type="text" id="pattern" placeholder="^[a-z0-9]+(_[a-z0-9]+)*$">
+    <button class="go" id="runBtn">Run tag lint</button>
+    <div id="status" role="status"></div>
+    <div id="downloads"></div>
+  </section>
+  <section id="reportWrap" class="hidden"><h2>Report</h2><pre class="report" id="report"></pre></section>
+
   <section>
     <h2>What it does</h2>
     <div class="grid">
@@ -110,5 +153,71 @@ node src/cli.js examples/tickets.csv --config examples/config.json --out-dir out
   <p>Built by Amir Hussain, operations manager and founder of AamirTechs.</p>
   <p class="links"><a href="https://aamirtechs.com">AamirTechs: operations, customer support and e-commerce services</a> <a href="https://github.com/aamirtechs">More open source tools</a></p>
 </footer>
+<script src="app.js"></script>
+<script>
+
+function download(name, text, type) {
+  var blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+}
+function setFiles(input, files) {
+  try { var dt = new DataTransfer(); for (var i = 0; i < files.length; i++) dt.items.add(files[i]); input.files = dt.files; } catch (e) {}
+}
+function readInput(fileInput, textId) {
+  var ta = document.getElementById(textId);
+  if (ta && ta.value.trim()) return Promise.resolve(ta.value);
+  var f = fileInput.files[0];
+  if (!f) return Promise.reject(new Error('Choose a file or paste its contents first.'));
+  return f.text();
+}
+
+(function () {
+  var dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', function (e) { e.preventDefault(); });
+  dz.addEventListener('drop', function (e) {
+    e.preventDefault();
+    Array.prototype.forEach.call(e.dataTransfer.files, function (f) {
+      if (f.name.toLowerCase().endsWith('.json')) setFiles(document.getElementById('configFile'), [f]);
+      else setFiles(document.getElementById('file'), [f]);
+    });
+  });
+  document.getElementById('runBtn').addEventListener('click', async function () {
+    var status = document.getElementById('status'); var downloads = document.getElementById('downloads'); var reportWrap = document.getElementById('reportWrap');
+    status.className = ''; status.textContent = ''; downloads.innerHTML = ''; reportWrap.classList.add('hidden');
+    try {
+      var text = await readInput(document.getElementById('file'), 'paste');
+      var config = {};
+      var ct = document.getElementById('configText').value.trim();
+      var cf = document.getElementById('configFile').files[0];
+      if (ct) config = JSON.parse(ct);
+      else if (cf) config = JSON.parse(await cf.text());
+      var options = Object.assign({}, config);
+      var dd = document.getElementById('deadDays').value;
+      if (dd !== '') options.deadDays = Number(dd);
+      var pat = document.getElementById('pattern').value.trim();
+      if (pat) options.pattern = pat;
+      var rd = document.getElementById('referenceDate').value;
+      if (rd) options.referenceDate = rd;
+      var api = window.TicketTagLint;
+      var tickets = api.parseTicketCsv(text);
+      var result = api.analyzeTickets(tickets, options);
+      var reportText = api.renderReport(result);
+      var plan = api.mergePlanCsv(result);
+      status.textContent = 'Tickets analysed: ' + result.ticketCount + '. Distinct tags: ' + result.tagCount + '. Near-duplicate clusters: ' + result.clusters.length + '. Merge plan rows: ' + result.mergePlan.length + '. Convention violations: ' + result.violations.length + '. Dead tags: ' + result.deadTags.length + '. One-off tags: ' + result.oneOffTags.length + '.';
+      var b1 = document.createElement('button'); b1.className = 'dl'; b1.textContent = 'Download tag-report.md';
+      b1.addEventListener('click', function () { download('tag-report.md', reportText, 'text/markdown;charset=utf-8'); });
+      var b2 = document.createElement('button'); b2.className = 'dl'; b2.textContent = 'Download tag-merge-plan.csv';
+      b2.addEventListener('click', function () { download('tag-merge-plan.csv', plan, 'text/csv;charset=utf-8'); });
+      downloads.appendChild(b1); downloads.appendChild(b2);
+      document.getElementById('report').textContent = reportText;
+      reportWrap.classList.remove('hidden');
+    } catch (e) { status.className = 'error'; status.textContent = e.message; }
+  });
+})();
+
+</script>
 </body>
 </html>

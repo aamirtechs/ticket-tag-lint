@@ -1,5 +1,6 @@
 # ticket-tag-lint
 Live page: https://aamirtechs.github.io/ticket-tag-lint/
+Use it in your browser: the Pages site above runs the full tool locally, no install needed.
 
 Analyse a ticket export and expose tag sprawl: near-duplicate tags, one-off tags, dead tags and naming-convention violations, with a ready-to-apply merge plan that maps every messy tag to a canonical one.
 
