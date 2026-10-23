@@ -1,0 +1,13 @@
+id,tags,created_at
+T-1001,"billing refund_request",2026-10-20
+T-1002,"Billing refund-request",2026-10-19
+T-1003,"billing refunds",2026-10-18
+T-1004,"billing refund_request login_issue",2026-10-17
+T-1005,"login-issue account_reset",2026-10-16
+T-1006,"login_issue",2026-10-15
+T-1007,"logn_issue VIP",2026-10-14
+T-1008,"shipping delayed_shipment",2026-10-10
+T-1009,"shipping",2026-09-28
+T-1010,"legacy_fax_order",2026-01-05
+T-1011,"one_time_glitch",2026-10-21
+T-1012,"billing refund_request shipping",2026-10-21
